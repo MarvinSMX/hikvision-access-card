@@ -59,12 +59,7 @@ class HikvisionAccessCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._config) return;
-    if (this._liveMode) {
-      // ha-camera-stream braucht aktuelles hass-Objekt
-      const stream = this.shadowRoot.querySelector("ha-camera-stream");
-      if (stream) stream.hass = hass;
-      return;
-    }
+    if (this._liveMode) return; // Live-Stream läuft im Browser selbst
     const fp = this._fingerprint(this._config.device);
     if (fp === this._lastFp) return;
     this._lastFp = fp;
@@ -375,11 +370,16 @@ class HikvisionAccessCard extends HTMLElement {
         ${showCamera ? `
         <div class="cam-wrap" id="cam-wrap">
           ${this._liveMode
-            ? `<div id="cam-live-mount" style="width:100%;height:100%;display:block;"></div>
-               <span class="cam-badge"><span class="live-dot"></span>Live</span>
-               <button class="live-toggle" id="live-toggle">
-                 <ha-icon icon="mdi:camera"></ha-icon>Snapshot
-               </button>`
+            ? (() => {
+                const liveUrl = this._liveStreamUrl(p);
+                return liveUrl
+                  ? `<img src="${liveUrl}" alt="Live" style="width:100%;height:100%;object-fit:cover;display:block;">
+                     <span class="cam-badge"><span class="live-dot"></span>Live</span>
+                     <button class="live-toggle" id="live-toggle">
+                       <ha-icon icon="mdi:camera"></ha-icon>Snapshot
+                     </button>`
+                  : `<div class="cam-placeholder"><ha-icon icon="mdi:cctv-off"></ha-icon></div>`;
+              })()
             : camPicture
               ? `<img src="${camPicture}" alt="Snapshot">
                  <span class="cam-badge">${this._fmtTime(evTimeState)}</span>
@@ -454,22 +454,15 @@ class HikvisionAccessCard extends HTMLElement {
     `;
 
     this._bindClicks(p);
-    if (this._liveMode) this._mountLiveStream(p);
   }
 
-  _mountLiveStream(p) {
-    const mount = this.shadowRoot.querySelector("#cam-live-mount");
-    if (!mount) return;
+  _liveStreamUrl(p) {
     const camEntityId = `camera.${p}_letzter_snapshot`;
-    const stateObj = this._hass?.states?.[camEntityId];
-    if (!stateObj) return;
-
-    const stream = document.createElement("ha-camera-stream");
-    stream.hass = this._hass;
-    stream.cameraImage = stateObj;
-    stream.cameraView = "live";
-    stream.style.cssText = "width:100%;height:100%;display:block;";
-    mount.appendChild(stream);
+    const pic = this._hass?.states?.[camEntityId]?.attributes?.entity_picture;
+    if (!pic) return null;
+    // entity_picture = /api/camera_proxy/camera.xxx?token=yyy
+    // Proxy-Stream  = /api/camera_proxy_stream/camera.xxx?token=yyy
+    return pic.replace("/api/camera_proxy/", "/api/camera_proxy_stream/");
   }
 
   _navigate(path) {
