@@ -556,7 +556,9 @@ class HikvisionAccessCard extends HTMLElement {
   }
 }
 
-customElements.define("hikvision-access-card", HikvisionAccessCard);
+if (!customElements.get("hikvision-access-card")) {
+  customElements.define("hikvision-access-card", HikvisionAccessCard);
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    EDITOR
@@ -652,7 +654,9 @@ class HikvisionAccessCardEditor extends HTMLElement {
   }
 }
 
-customElements.define("hikvision-access-card-editor", HikvisionAccessCardEditor);
+if (!customElements.get("hikvision-access-card-editor")) {
+  customElements.define("hikvision-access-card-editor", HikvisionAccessCardEditor);
+}
 
 window.customCards = window.customCards || [];
 window.customCards.push({
