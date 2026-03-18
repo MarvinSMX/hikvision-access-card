@@ -18,6 +18,32 @@ class HikvisionAccessCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._liveMode = false;
+    this._liveTimer = null;
+  }
+
+  disconnectedCallback() {
+    this._stopLive();
+  }
+
+  _startLive() {
+    if (this._liveTimer) return;
+    this._liveTimer = setInterval(() => this._render(), 3000);
+  }
+
+  _stopLive() {
+    if (this._liveTimer) {
+      clearInterval(this._liveTimer);
+      this._liveTimer = null;
+    }
+  }
+
+  _toggleLive() {
+    this._liveMode = !this._liveMode;
+    // Im Live-Modus übernimmt ha-camera-stream den Stream — kein Interval nötig
+    if (!this._liveMode) this._stopLive();
+    this._lastFp = null; // force re-render
+    this._render();
   }
 
   setConfig(config) {
@@ -33,6 +59,12 @@ class HikvisionAccessCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._config) return;
+    if (this._liveMode) {
+      // ha-camera-stream braucht aktuelles hass-Objekt
+      const stream = this.shadowRoot.querySelector("ha-camera-stream");
+      if (stream) stream.hass = hass;
+      return;
+    }
     const fp = this._fingerprint(this._config.device);
     if (fp === this._lastFp) return;
     this._lastFp = fp;
@@ -50,13 +82,15 @@ class HikvisionAccessCard extends HTMLElement {
       `sensor.${p}_geratestatus`,
       `switch.${p}_zugangssperre`,
     ];
-    if (this._config.show_camera !== false) {
-      ids.push(`camera.${p}_letzter_snapshot`);
-    }
     return ids.map((id) => {
       const s = this._hass?.states?.[id];
       return s ? `${s.state}|${s.attributes?.entity_picture ?? ""}` : "";
-    }).join("\x00");
+    }).join("\x00") + (this._config.show_camera !== false
+      ? (() => {
+          const s = this._hass?.states?.[`camera.${p}_letzter_snapshot`];
+          return s ? `\x00cam:${s.last_changed}` : "";
+        })()
+      : "");
   }
 
   _s(entityId) {
@@ -121,7 +155,9 @@ class HikvisionAccessCard extends HTMLElement {
     const showCamera    = this._config.show_camera !== false;
     const camEntityId   = `camera.${p}_letzter_snapshot`;
     const camState      = showCamera ? this._s(camEntityId) : null;
-    const camPicture    = camState?.attributes?.entity_picture ?? null;
+    const camPictureRaw = camState?.attributes?.entity_picture ?? null;
+    const camTs         = camState?.last_changed ? new Date(camState.last_changed).getTime() : Date.now();
+    const camPicture    = camPictureRaw ? `${camPictureRaw}?t=${camTs}` : null;
 
     // Mushroom-style shape colors (icon bg = color at 15% opacity via hex alpha)
     const doorShapeBg   = doorOpen  ? "#FF980026" : "#4CAF5026";
@@ -241,7 +277,37 @@ class HikvisionAccessCard extends HTMLElement {
           padding: 2px 7px;
           border-radius: 99px;
           backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          gap: 5px;
         }
+        .live-dot {
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: #f44;
+          animation: livepulse 1.2s infinite;
+          flex-shrink: 0;
+        }
+        @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .live-toggle {
+          position: absolute;
+          bottom: 8px;
+          left: 8px;
+          background: rgba(0,0,0,.55);
+          color: #fff;
+          border: none;
+          border-radius: 99px;
+          padding: 2px 8px 2px 5px;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .live-toggle ha-icon { --mdc-icon-size: 13px; }
+        .live-toggle:hover { background: rgba(0,0,0,.75); }
 
         /* ── Grid ── */
         .grid {
@@ -305,15 +371,24 @@ class HikvisionAccessCard extends HTMLElement {
           </button>
         </div>
 
-        <!-- Camera snapshot (ausgeblendet wenn show_camera: false) -->
+        <!-- Camera (ausgeblendet wenn show_camera: false) -->
         ${showCamera ? `
         <div class="cam-wrap" id="cam-wrap">
-          ${camPicture
-            ? `<img src="${camPicture}" alt="Snapshot">
-               <span class="cam-badge">${this._fmtTime(evTimeState)}</span>`
-            : `<div class="cam-placeholder">
-                 <ha-icon icon="mdi:camera-off"></ha-icon>
-               </div>`
+          ${this._liveMode
+            ? `<div id="cam-live-mount" style="width:100%;height:100%;display:block;"></div>
+               <span class="cam-badge"><span class="live-dot"></span>Live</span>
+               <button class="live-toggle" id="live-toggle">
+                 <ha-icon icon="mdi:camera"></ha-icon>Snapshot
+               </button>`
+            : camPicture
+              ? `<img src="${camPicture}" alt="Snapshot">
+                 <span class="cam-badge">${this._fmtTime(evTimeState)}</span>
+                 <button class="live-toggle" id="live-toggle">
+                   <ha-icon icon="mdi:cctv"></ha-icon>Live
+                 </button>`
+              : `<div class="cam-placeholder">
+                   <ha-icon icon="mdi:camera-off"></ha-icon>
+                 </div>`
           }
         </div>` : ""}
 
@@ -379,6 +454,22 @@ class HikvisionAccessCard extends HTMLElement {
     `;
 
     this._bindClicks(p);
+    if (this._liveMode) this._mountLiveStream(p);
+  }
+
+  _mountLiveStream(p) {
+    const mount = this.shadowRoot.querySelector("#cam-live-mount");
+    if (!mount) return;
+    const camEntityId = `camera.${p}_letzter_snapshot`;
+    const stateObj = this._hass?.states?.[camEntityId];
+    if (!stateObj) return;
+
+    const stream = document.createElement("ha-camera-stream");
+    stream.hass = this._hass;
+    stream.cameraImage = stateObj;
+    stream.cameraView = "live";
+    stream.style.cssText = "width:100%;height:100%;display:block;";
+    mount.appendChild(stream);
   }
 
   _navigate(path) {
@@ -401,12 +492,21 @@ class HikvisionAccessCard extends HTMLElement {
       );
     }
 
-    // Kamera-Bild → more-info Camera (nur wenn sichtbar)
+    // Live-Toggle-Button
+    const liveToggle = this.shadowRoot.querySelector("#live-toggle");
+    if (liveToggle) {
+      liveToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._toggleLive();
+      });
+    }
+
+    // Kamera-Bild → more-info Camera (nur wenn sichtbar, nicht im Live-Modus)
     const camWrap = this.shadowRoot.querySelector("#cam-wrap");
     if (camWrap) {
-      camWrap.addEventListener("click", () =>
-        this._moreInfo(`camera.${p}_letzter_snapshot`)
-      );
+      camWrap.addEventListener("click", () => {
+        if (!this._liveMode) this._moreInfo(`camera.${p}_letzter_snapshot`);
+      });
     }
 
 
