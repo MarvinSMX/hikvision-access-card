@@ -49,8 +49,10 @@ class HikvisionAccessCard extends HTMLElement {
       `sensor.${p}_zugang`,
       `sensor.${p}_geratestatus`,
       `switch.${p}_zugangssperre`,
-      `camera.${p}_letzter_snapshot`,
     ];
+    if (this._config.show_camera !== false) {
+      ids.push(`camera.${p}_letzter_snapshot`);
+    }
     return ids.map((id) => {
       const s = this._hass?.states?.[id];
       return s ? `${s.state}|${s.attributes?.entity_picture ?? ""}` : "";
@@ -115,9 +117,10 @@ class HikvisionAccessCard extends HTMLElement {
     const accessLabel = granted   ? "Gewährt"    : denied ? "Verweigert" : "—";
     const accessIcon  = granted   ? "mdi:check-circle" : denied ? "mdi:close-circle" : "mdi:minus-circle-outline";
 
-    // Camera snapshot
+    // Camera snapshot (only if show_camera not explicitly disabled)
+    const showCamera    = this._config.show_camera !== false;
     const camEntityId   = `camera.${p}_letzter_snapshot`;
-    const camState      = this._s(camEntityId);
+    const camState      = showCamera ? this._s(camEntityId) : null;
     const camPicture    = camState?.attributes?.entity_picture ?? null;
 
     // Mushroom-style shape colors (icon bg = color at 15% opacity via hex alpha)
@@ -302,7 +305,8 @@ class HikvisionAccessCard extends HTMLElement {
           </button>
         </div>
 
-        <!-- Camera snapshot -->
+        <!-- Camera snapshot (ausgeblendet wenn show_camera: false) -->
+        ${showCamera ? `
         <div class="cam-wrap" id="cam-wrap">
           ${camPicture
             ? `<img src="${camPicture}" alt="Snapshot">
@@ -311,7 +315,7 @@ class HikvisionAccessCard extends HTMLElement {
                  <ha-icon icon="mdi:camera-off"></ha-icon>
                </div>`
           }
-        </div>
+        </div>` : ""}
 
         <!-- 2×2 Grid -->
         <div class="grid">
@@ -397,13 +401,14 @@ class HikvisionAccessCard extends HTMLElement {
       );
     }
 
-    // Kamera-Bild → more-info Camera
+    // Kamera-Bild → more-info Camera (nur wenn sichtbar)
     const camWrap = this.shadowRoot.querySelector("#cam-wrap");
     if (camWrap) {
       camWrap.addEventListener("click", () =>
         this._moreInfo(`camera.${p}_letzter_snapshot`)
       );
     }
+
 
     // Tiles → more-info der jeweiligen Entität
     this.shadowRoot.querySelectorAll(".tile[data-entity]").forEach((tile) => {
@@ -447,7 +452,7 @@ class HikvisionAccessCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { device: "hintereingang_halle", title: "" };
+    return { device: "hintereingang_halle", title: "", show_camera: true };
   }
 }
 
@@ -472,6 +477,7 @@ class HikvisionAccessCardEditor extends HTMLElement {
 
   _render() {
     if (!this._config) return;
+    const showCam = this._config.show_camera !== false;
     this.innerHTML = `
       <style>
         .editor { display: flex; flex-direction: column; gap: 14px; padding: 4px 0; }
@@ -482,7 +488,7 @@ class HikvisionAccessCardEditor extends HTMLElement {
           color: var(--secondary-text-color);
           margin-bottom: 4px;
         }
-        .field input {
+        .field input[type="text"] {
           width: 100%;
           box-sizing: border-box;
           padding: 8px 10px;
@@ -492,8 +498,17 @@ class HikvisionAccessCardEditor extends HTMLElement {
           color: var(--primary-text-color);
           font-size: .9rem;
         }
-        .field input:focus { outline: none; border-color: var(--primary-color); }
+        .field input[type="text"]:focus { outline: none; border-color: var(--primary-color); }
         .hint { font-size: .72rem; color: var(--secondary-text-color); margin-top: 3px; }
+        .toggle-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: .9rem;
+          color: var(--primary-text-color);
+          cursor: pointer;
+        }
+        .toggle-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
       </style>
       <div class="editor">
         <div class="field">
@@ -509,6 +524,13 @@ class HikvisionAccessCardEditor extends HTMLElement {
             value="${this._config.title || ""}"
             placeholder="Hintereingang Halle">
         </div>
+        <div class="field">
+          <label class="toggle-row">
+            <input id="show_camera" type="checkbox" ${showCam ? "checked" : ""}>
+            Kamera-Snapshot anzeigen
+          </label>
+          <div class="hint">Deaktivieren, wenn Snapshots in der Integration ausgeschaltet sind.</div>
+        </div>
       </div>
     `;
     ["device", "title"].forEach((id) => {
@@ -520,6 +542,13 @@ class HikvisionAccessCardEditor extends HTMLElement {
         });
       }
     });
+    const camToggle = this.querySelector("#show_camera");
+    if (camToggle) {
+      camToggle.addEventListener("change", (e) => {
+        this._config = { ...this._config, show_camera: e.target.checked };
+        this._fire(this._config);
+      });
+    }
   }
 }
 
