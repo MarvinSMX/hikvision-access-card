@@ -393,10 +393,10 @@ class HikvisionAccessCard extends HTMLElement {
   }
 
   _bindClicks(p) {
-    // Header-Body → more-info Gerätestatus
-    const headerBody = this.shadowRoot.querySelector(".header-body");
-    if (headerBody) {
-      headerBody.addEventListener("click", () =>
+    // Header → more-info Gerätestatus
+    const headerInfo = this.shadowRoot.querySelector(".header-info");
+    if (headerInfo) {
+      headerInfo.addEventListener("click", () =>
         this._moreInfo(`sensor.${p}_geratestatus`)
       );
     }
