@@ -77,15 +77,17 @@ class HikvisionAccessCard extends HTMLElement {
       `sensor.${p}_geratestatus`,
       `switch.${p}_zugangssperre`,
     ];
-    return ids.map((id) => {
+    const base = ids.map((id) => {
       const s = this._hass?.states?.[id];
       return s ? `${s.state}|${s.attributes?.entity_picture ?? ""}` : "";
-    }).join("\x00") + (this._config.show_camera !== false
-      ? (() => {
-          const s = this._hass?.states?.[`camera.${p}_letzter_snapshot`];
-          return s ? `\x00cam:${s.last_changed}` : "";
-        })()
-      : "");
+    }).join("\x00");
+    const camId = `camera.${p}_letzter_snapshot`;
+    const camInStates = camId in (this._hass?.states ?? {});
+    if (this._config.show_camera !== false && camInStates) {
+      const s = this._hass?.states?.[camId];
+      return base + (s ? `\x00cam:${s.last_changed}` : "\x00cam:none");
+    }
+    return base;
   }
 
   _s(entityId) {
@@ -146,9 +148,10 @@ class HikvisionAccessCard extends HTMLElement {
     const accessLabel = granted   ? "Gewährt"    : denied ? "Verweigert" : "—";
     const accessIcon  = granted   ? "mdi:check-circle" : denied ? "mdi:close-circle" : "mdi:minus-circle-outline";
 
-    // Camera snapshot (only if show_camera not explicitly disabled)
-    const showCamera    = this._config.show_camera !== false;
+    // Camera: nur anzeigen wenn show_camera nicht deaktiviert UND Entity existiert
     const camEntityId   = `camera.${p}_letzter_snapshot`;
+    const camExists     = camEntityId in (this._hass?.states ?? {});
+    const showCamera    = this._config.show_camera !== false && camExists;
     const camState      = showCamera ? this._s(camEntityId) : null;
     const camPictureRaw = camState?.attributes?.entity_picture ?? null;
     const camTs         = camState?.last_changed ? new Date(camState.last_changed).getTime() : Date.now();
