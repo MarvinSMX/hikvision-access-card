@@ -15,18 +15,16 @@ Dieses Repository enthält **zwei eigenständige Karten** (jeweils eigene `.js`-
 2. URL deines Card-Repos · Kategorie: **Lovelace**
 3. Installieren → **HA neu laden**
 
-### Wichtig: zweite Lovelace-Ressource
+### Eine Ressource reicht (empfohlen)
 
-HACS trägt standardmäßig nur die in `hacs.json` hinterlegte Hauptdatei ein (`hikvision-access-card.js`).  
-Für die Übersichtskarte zusätzlich:
+Die Datei `hikvision-access-card.js` **lädt automatisch** `hikvision-access-overview-card.js` aus demselben Ordner (HACS oder `/local/`).  
+Du musst nur die **Haupt-Ressource** eintragen — danach einmal **hart neu laden** (Strg+Shift+R).
 
-1. **Einstellungen → Dashboards → ⋮ → Ressourcen**
-2. **Ressource hinzufügen**
-3. URL (Pfade können je nach HACS-Ordner leicht abweichen):
+### Optional: zweite Ressource manuell
 
-   - ` /hacsfiles/hikvision-access-card/hikvision-access-overview-card.js `
+Falls der Auto-Loader bei dir nicht greift (selten), zusätzlich eintragen:
 
-4. **Typ:** JavaScript-Modul → Speichern → Browser einmal hart neu laden (Strg+Shift+R)
+`/hacsfiles/hikvision-access-card/hikvision-access-overview-card.js` · Typ: **JavaScript-Modul**
 
 ## Manuelle Installation
 

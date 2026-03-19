@@ -661,3 +661,25 @@ window.customCards.push({
   description: "Übersicht für Hikvision Face Terminals",
   preview: true,
 });
+
+/* Nachladen der Übersichtskarte aus derselben URL-Basis (eine Ressource reicht).
+   HACS: …/hikvision-access-card.js → lädt automatisch …/hikvision-access-overview-card.js */
+(function loadHikvisionAccessOverviewSibling() {
+  if (customElements.get("hikvision-access-overview-card")) return;
+  const marker = "hikvision-access-card.js";
+  const list = document.querySelectorAll("script[src]");
+  for (let i = list.length - 1; i >= 0; i--) {
+    const src = list[i].getAttribute("src") || "";
+    if (!src.includes(marker)) continue;
+    const url = src.includes(marker)
+      ? src.split(marker)[0] + "hikvision-access-overview-card.js"
+      : "";
+    if (!url || url === "hikvision-access-overview-card.js") continue;
+    const s = document.createElement("script");
+    s.type = "module";
+    s.src = url;
+    s.async = true;
+    document.head.appendChild(s);
+    return;
+  }
+})();
