@@ -1,0 +1,35 @@
+# Beispiel: Dashboard „Sicherheit / Zugriff“ mit Gebäude-Tabs
+# In der UI: neues Dashboard anlegen → Tab pro Gebäude → jeweils eine
+# „Hikvision Access Übersicht“-Karte mit den Terminals dieses Gebäudes.
+#
+# Voraussetzung: Zwei Lovelace-Ressourcen (JavaScript-Modul):
+#   1) …/hikvision-access-card.js
+#   2) …/hikvision-access-overview-card.js   ← zweite Datei aus demselben Repo
+
+title: Sicherheit / Zugriff
+views:
+  - title: Gebäude 441
+    path: zugriff-441
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: custom:hikvision-access-overview-card
+            title: Gebäude 441 — Zugang
+            devices:
+              - device: hintereingang_halle
+                title: Hintereingang Halle
+              # - device: weiteres_terminal_prefix
+              #   title: Nebeneingang
+
+  - title: Gebäude 442
+    path: zugriff-442
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: custom:hikvision-access-overview-card
+            title: Gebäude 442 — Zugang
+            devices:
+              - device: beispiel_terminal_442
+                title: Haupteingang
